@@ -1,101 +1,94 @@
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+// Scene
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x000000, 10, 60);
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// Camera
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  1000
+);
+camera.position.set(0, 5, 10);
 
-let lanes = [
-  canvas.width / 2 - 120,
-  canvas.width / 2,
-  canvas.width / 2 + 120
-];
+// Renderer
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
 
-let player = {
-  lane: 1,
-  x: lanes[1],
-  y: canvas.height - 150,
-  width: 50,
-  height: 80,
-  jump: false,
-  yVel: 0
-};
+// Lights
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
+const light = new THREE.DirectionalLight(0xffffff, 1);
+light.position.set(0, 10, 5);
+scene.add(light);
 
+// Ground (Track)
+const groundGeo = new THREE.BoxGeometry(10, 1, 200);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.position.z = -80;
+scene.add(ground);
+
+// Player
+const playerGeo = new THREE.BoxGeometry(1, 2, 1);
+const playerMat = new THREE.MeshStandardMaterial({ color: 0x00ffff });
+const player = new THREE.Mesh(playerGeo, playerMat);
+player.position.y = 1;
+scene.add(player);
+
+// Lanes
+const lanes = [-3, 0, 3];
+let currentLane = 1;
+
+// Obstacles
 let obstacles = [];
-let speed = 6;
-let gravity = 0.6;
-let score = 0;
+const obsGeo = new THREE.BoxGeometry(1, 2, 1);
+const obsMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
 
+// Spawn obstacle
 function spawnObstacle() {
-  obstacles.push({
-    lane: Math.floor(Math.random() * 3),
-    y: -100,
-    width: 50,
-    height: 80
-  });
+  const obs = new THREE.Mesh(obsGeo, obsMat);
+  obs.position.x = lanes[Math.floor(Math.random() * 3)];
+  obs.position.y = 1;
+  obs.position.z = -100;
+  scene.add(obs);
+  obstacles.push(obs);
 }
+setInterval(spawnObstacle, 1200);
 
-setInterval(spawnObstacle, 1500);
+// Controls
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft" && currentLane > 0) currentLane--;
+  if (e.key === "ArrowRight" && currentLane < 2) currentLane++;
+});
 
-function update() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+let speed = 0.6;
 
-  // Player physics
-  if (player.jump) {
-    player.yVel -= gravity;
-    player.y -= player.yVel;
-    if (player.y >= canvas.height - 150) {
-      player.y = canvas.height - 150;
-      player.jump = false;
-      player.yVel = 0;
-    }
-  }
+// Game loop
+function animate() {
+  requestAnimationFrame(animate);
 
-  player.x = lanes[player.lane];
+  player.position.x += (lanes[currentLane] - player.position.x) * 0.2;
 
-  // Draw player
-  ctx.fillStyle = "cyan";
-  ctx.fillRect(player.x, player.y, player.width, player.height);
-
-  // Obstacles
-  ctx.fillStyle = "red";
-  for (let i = obstacles.length - 1; i >= 0; i--) {
-    let o = obstacles[i];
-    o.y += speed;
-    let ox = lanes[o.lane];
-
-    ctx.fillRect(ox, o.y, o.width, o.height);
+  obstacles.forEach((obs, i) => {
+    obs.position.z += speed;
 
     // Collision
     if (
-      ox < player.x + player.width &&
-      ox + o.width > player.x &&
-      o.y < player.y + player.height &&
-      o.y + o.height > player.y
+      Math.abs(obs.position.z - player.position.z) < 1 &&
+      Math.abs(obs.position.x - player.position.x) < 1
     ) {
-      alert("Game Over! Score: " + score);
+      alert("GAME OVER");
       location.reload();
     }
 
-    if (o.y > canvas.height) {
+    if (obs.position.z > 10) {
+      scene.remove(obs);
       obstacles.splice(i, 1);
-      score++;
     }
-  }
+  });
 
-  ctx.fillStyle = "white";
-  ctx.font = "24px Arial";
-  ctx.fillText("Score: " + score, 20, 40);
-
-  requestAnimationFrame(update);
+  renderer.render(scene, camera);
 }
 
-document.addEventListener("keydown", e => {
-  if (e.key === "ArrowLeft" && player.lane > 0) player.lane--;
-  if (e.key === "ArrowRight" && player.lane < 2) player.lane++;
-  if (e.key === "ArrowUp" && !player.jump) {
-    player.jump = true;
-    player.yVel = 15;
-  }
-});
-
-update();
+animate();
