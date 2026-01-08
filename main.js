@@ -17,23 +17,19 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // ----- LIGHTS -----
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
-scene.add(hemiLight);
+const ambientLight = new THREE.AmbientLight(0xffffff, 1); // full ambient light
+scene.add(ambientLight);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
 dirLight.position.set(5, 10, 5);
 scene.add(dirLight);
 
 // ----- GROUND -----
-const groundGeo = new THREE.BoxGeometry(10, 1, 200);
-const groundMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+const groundGeo = new THREE.BoxGeometry(10, 1, 50);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
 const ground = new THREE.Mesh(groundGeo, groundMat);
-ground.position.z = -80;
+ground.position.z = 0;
 scene.add(ground);
-
-// ----- LANES -----
-const lanes = [-3, 0, 3];
-let currentLane = 1;
 
 // ----- PLAYER -----
 const playerGeo = new THREE.BoxGeometry(1, 2, 1);
@@ -41,6 +37,10 @@ const playerMat = new THREE.MeshStandardMaterial({ color: 0x00ffff });
 const player = new THREE.Mesh(playerGeo, playerMat);
 player.position.y = 1;
 scene.add(player);
+
+// ----- LANES -----
+const lanes = [-3, 0, 3];
+let currentLane = 1;
 
 // ----- OBSTACLES -----
 let obstacles = [];
@@ -51,20 +51,20 @@ function loadGLTFRandom(files) {
   return new Promise(resolve => {
     loader.load("assets/" + file, gltf => {
       const obj = gltf.scene;
-      obj.name = file.split(".")[0]; // save name for rotation
+      obj.name = file.split(".")[0];
       resolve(obj);
     });
   });
 }
 
-// Spawn obstacle
+// Spawn obstacles every 1.5s
 async function spawnObstacle() {
   const files = ["tyre.glb", "destroyed_car.glb", "drum.glb"];
   const obj = await loadGLTFRandom(files);
   obj.position.x = lanes[Math.floor(Math.random() * 3)];
-  obj.position.y = 0; // adjust if needed
-  obj.position.z = player.position.z - 100;
-  obj.scale.set(1, 1, 1); // adjust size
+  obj.position.y = 0;
+  obj.position.z = player.position.z - 50; // ahead of player
+  obj.scale.set(1,1,1);
   scene.add(obj);
   obstacles.push(obj);
 }
@@ -84,33 +84,34 @@ let score = 0;
 function animate() {
   requestAnimationFrame(animate);
 
-  // Auto-run forward
+  // Auto-run
   player.position.z -= speed;
   camera.position.z = player.position.z + 10;
+  camera.lookAt(player.position);
 
   // Smooth lane movement
   player.position.x += (lanes[currentLane] - player.position.x) * 0.2;
 
-  // Move obstacles + check collision
+  // Obstacles movement & collision
   obstacles.forEach((obs, i) => {
     obs.position.z += speed;
 
-    // Spin tyre if it's a tyre
+    // Rotate tyre for effect
     if (obs.name.includes("tyre")) obs.rotation.x += 0.1;
 
-    // Collision detection
+    // Collision
     if (
       Math.abs(obs.position.z - player.position.z) < 1 &&
       Math.abs(obs.position.x - player.position.x) < 1
     ) {
-      alert("Game Over! Monster got you! Score: " + score.toFixed(0));
+      alert("Game Over! Score: " + score.toFixed(0));
       location.reload();
     }
 
-    // Remove obstacle if passed camera
+    // Remove passed obstacles
     if (obs.position.z > camera.position.z + 10) {
       scene.remove(obs);
-      obstacles.splice(i, 1);
+      obstacles.splice(i,1);
       score++;
     }
   });
