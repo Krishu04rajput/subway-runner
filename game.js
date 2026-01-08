@@ -1,8 +1,8 @@
-// Scene
+// ----- SCENE -----
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 10, 60);
+scene.fog = new THREE.Fog(0x0a0a0a, 10, 200);
 
-// Camera
+// ----- CAMERA -----
 const camera = new THREE.PerspectiveCamera(
   75,
   window.innerWidth / window.innerHeight,
@@ -11,80 +11,107 @@ const camera = new THREE.PerspectiveCamera(
 );
 camera.position.set(0, 5, 10);
 
-// Renderer
+// ----- RENDERER -----
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Lights
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1));
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(0, 10, 5);
-scene.add(light);
+// ----- LIGHTS -----
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
+scene.add(hemiLight);
 
-// Ground (Track)
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(5, 10, 5);
+scene.add(dirLight);
+
+// ----- GROUND -----
 const groundGeo = new THREE.BoxGeometry(10, 1, 200);
-const groundMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
 const ground = new THREE.Mesh(groundGeo, groundMat);
 ground.position.z = -80;
 scene.add(ground);
 
-// Player
+// ----- LANES -----
+const lanes = [-3, 0, 3];
+let currentLane = 1;
+
+// ----- PLAYER -----
 const playerGeo = new THREE.BoxGeometry(1, 2, 1);
 const playerMat = new THREE.MeshStandardMaterial({ color: 0x00ffff });
 const player = new THREE.Mesh(playerGeo, playerMat);
 player.position.y = 1;
 scene.add(player);
 
-// Lanes
-const lanes = [-3, 0, 3];
-let currentLane = 1;
-
-// Obstacles
+// ----- OBSTACLES -----
 let obstacles = [];
-const obsGeo = new THREE.BoxGeometry(1, 2, 1);
-const obsMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+const loader = new THREE.GLTFLoader();
+
+function loadGLTFRandom(files) {
+  const file = files[Math.floor(Math.random() * files.length)];
+  return new Promise(resolve => {
+    loader.load("assets/" + file, gltf => {
+      const obj = gltf.scene;
+      obj.name = file.split(".")[0]; // save name for rotation
+      resolve(obj);
+    });
+  });
+}
 
 // Spawn obstacle
-function spawnObstacle() {
-  const obs = new THREE.Mesh(obsGeo, obsMat);
-  obs.position.x = lanes[Math.floor(Math.random() * 3)];
-  obs.position.y = 1;
-  obs.position.z = -100;
-  scene.add(obs);
-  obstacles.push(obs);
+async function spawnObstacle() {
+  const files = ["tyre.glb", "destroyed_car.glb", "drum.glb"];
+  const obj = await loadGLTFRandom(files);
+  obj.position.x = lanes[Math.floor(Math.random() * 3)];
+  obj.position.y = 0; // adjust if needed
+  obj.position.z = player.position.z - 100;
+  obj.scale.set(1, 1, 1); // adjust size
+  scene.add(obj);
+  obstacles.push(obj);
 }
-setInterval(spawnObstacle, 1200);
+setInterval(spawnObstacle, 1500);
 
-// Controls
+// ----- CONTROLS -----
 document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft" && currentLane > 0) currentLane--;
   if (e.key === "ArrowRight" && currentLane < 2) currentLane++;
 });
 
-let speed = 0.6;
+// ----- GAME VARIABLES -----
+let speed = 0.8;
+let score = 0;
 
-// Game loop
+// ----- ANIMATE LOOP -----
 function animate() {
   requestAnimationFrame(animate);
 
+  // Auto-run forward
+  player.position.z -= speed;
+  camera.position.z = player.position.z + 10;
+
+  // Smooth lane movement
   player.position.x += (lanes[currentLane] - player.position.x) * 0.2;
 
+  // Move obstacles + check collision
   obstacles.forEach((obs, i) => {
     obs.position.z += speed;
 
-    // Collision
+    // Spin tyre if it's a tyre
+    if (obs.name.includes("tyre")) obs.rotation.x += 0.1;
+
+    // Collision detection
     if (
       Math.abs(obs.position.z - player.position.z) < 1 &&
       Math.abs(obs.position.x - player.position.x) < 1
     ) {
-      alert("GAME OVER");
+      alert("Game Over! Monster got you! Score: " + score.toFixed(0));
       location.reload();
     }
 
-    if (obs.position.z > 10) {
+    // Remove obstacle if passed camera
+    if (obs.position.z > camera.position.z + 10) {
       scene.remove(obs);
       obstacles.splice(i, 1);
+      score++;
     }
   });
 
